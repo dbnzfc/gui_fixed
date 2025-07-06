@@ -1,101 +1,93 @@
 local M = {}
 
--- Универсальная функция поиска элементов интерфейса
-local function findChessUI(playerGui)
-    -- Проверка различных вариантов интерфейса
-    local uiVariants = {
-        "MainMenu", "GameUI", "ChessUI", "BoardUI", "ChessBoard"
-    }
-    
-    for _, name in ipairs(uiVariants) do
-        local ui = playerGui:FindFirstChild(name)
-        if ui then
-            -- Поиск боковой панели в разных вариантах
-            local sidePanel = ui:FindFirstChild("SideFrame") 
-                or ui:FindFirstChild("MenuContainer")
-                or ui:FindFirstChild("SidePanel")
-                or ui:FindFirstChild("MenuFrame")
-                or ui:FindFirstChild("RightPanel")
-            
-            if sidePanel then
-                return ui, sidePanel
-            end
-        end
-    end
-    
-    -- Расширенный поиск по всем элементам GUI
-    for _, screenGui in ipairs(playerGui:GetChildren()) do
-        if screenGui:IsA("ScreenGui") then
-            -- Поиск по характерным элементам шахмат
-            local timerFrame = screenGui:FindFirstChild("TimerFrame", true)
-            local chessBoard = screenGui:FindFirstChild("ChessBoard", true)
-            
-            if timerFrame or chessBoard then
-                -- Поиск подходящего контейнера для кнопки
-                local possibleContainers = {
-                    screenGui:FindFirstChild("SideFrame"),
-                    screenGui:FindFirstChild("RightPanel"),
-                    screenGui:FindFirstChild("MenuContainer"),
-                    screenGui:FindFirstChild("ButtonContainer")
-                }
-                
-                for _, container in ipairs(possibleContainers) do
-                    if container then
-                        return screenGui, container
-                    end
-                end
-                
-                -- Если контейнер не найден, но есть шахматная доска
-                return screenGui, screenGui
-            end
-        end
-    end
-    
-    return nil, nil
-end
-
 function M.init(modules)
     local config = modules.config
     local state = modules.state
     local ai = modules.ai
 
-    -- Увеличиваем время ожидания для медленных загрузок
-    task.wait(5)
+    -- Увеличиваем время ожидания до 15 секунд
+    print("Ожидание загрузки интерфейса...")
+    task.wait(15)
 
     local player = game:GetService("Players").LocalPlayer
     local playerGui = player:WaitForChild("PlayerGui")
     
-    -- Универсальный поиск интерфейса
-    local mainUI, sideFrame = findChessUI(playerGui)
-    
-    -- Если интерфейс не найден
-    if not sideFrame then
-        warn("Chess UI not found. Possible solutions:")
-        warn("1. Join a chess game first")
-        warn("2. Try again in 10 seconds")
-        warn("3. Contact script support with current GUI structure")
+    -- Специальная функция для поиска шахматного интерфейса
+    local function findChessBoard()
+        -- Вариант 1: Поиск по характерным элементам
+        local chessMarkers = {
+            "ChessBoard", "Board", "GameBoard", "TimerFrame",
+            "CapturedPieces", "PromotionFrame", "GameResult"
+        }
         
-        -- Автоматический перезапуск через 10 секунд
-        task.wait(10)
-        return M.init(modules)
+        for _, marker in ipairs(chessMarkers) do
+            local found = playerGui:FindFirstChild(marker, true)
+            if found then
+                print("Найден маркер шахмат:", marker)
+                return found.Parent
+            end
+        end
+        
+        -- Вариант 2: Поиск по всем ScreenGui
+        for _, screenGui in ipairs(playerGui:GetChildren()) do
+            if screenGui:IsA("ScreenGui") then
+                for _, child in ipairs(screenGui:GetDescendants()) do
+                    if child:IsA("TextLabel") and child.Text:match("шахмат") then
+                        print("Найден текстовый элемент:", child.Text)
+                        return screenGui
+                    end
+                end
+            end
+        end
+        
+        return nil
     end
 
+    -- Поиск интерфейса
+    local chessUI = findChessBoard()
+    
+    if not chessUI then
+        -- Расширенная диагностика
+        print("=== ДИАГНОСТИКА ИНТЕРФЕЙСА ===")
+        print("PlayerGui содержит:")
+        for _, child in ipairs(playerGui:GetChildren()) do
+            print("- "..child.Name.." ("..child.ClassName..")")
+            if child:IsA("ScreenGui") then
+                print("  Элементы:")
+                for _, elem in ipairs(child:GetChildren()) do
+                    print("  - "..elem.Name)
+                end
+            end
+        end
+        
+        warn("Шахматный интерфейс не найден. Запустите скрипт ПОСЛЕ начала игры!")
+        return
+    end
+
+    -- Автоматическое определение контейнера
+    local container = chessUI:FindFirstChild("SideFrame") 
+        or chessUI:FindFirstChild("MenuContainer")
+        or chessUI:FindFirstChild("RightPanel")
+        or chessUI:FindFirstChild("ButtonFrame")
+        or chessUI -- Используем сам UI как контейнер
+    
     -- Проверка на дубликаты
-    if sideFrame:FindFirstChild("aiFrame") then
+    if container:FindFirstChild("aiFrame") then
         return
     end
     
     -- Создаем фрейм для кнопки AI
     local aiFrame = Instance.new("Frame")
     aiFrame.Name = "aiFrame"
-    aiFrame.Size = UDim2.new(1, 0, 0.045, 0)
+    aiFrame.Size = UDim2.new(0.2, 0, 0.05, 0)
+    aiFrame.Position = UDim2.new(0.78, 0, 0.02, 0) -- Позиция в правом верхнем углу
     aiFrame.BackgroundColor3 = config.COLORS.off.background
-    aiFrame.LayoutOrder = 99
-    aiFrame.Parent = sideFrame
+    aiFrame.ZIndex = 100
+    aiFrame.Parent = container
     
-    -- ... (остальной код создания UI без изменений) ...
+    -- ... (остальной код создания кнопки) ...
     
-    print("[SUCCESS] AI interface injected successfully!")
+    print("Интерфейс AI успешно добавлен!")
 end
 
 return M
